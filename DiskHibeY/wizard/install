@@ -1,0 +1,11 @@
+[
+  {
+    "stepTitle": "安装说明",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "DiskHibeY 需要系统已安装 <b>python3</b> 与 <b>hdparm</b>（fnOS 一般已内置，安装时会自动检查）。<br/><br/>应用将以 root 身份运行，用于向硬盘发送 ATA 休眠指令（hdparm -y）。<br/><br/>本应用仅执行一次性休眠指令，<b>不会修改</b> fnOS 系统自带的硬盘自动休眠设置。"
+      }
+    ]
+  }
+]
