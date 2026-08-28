@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-DiskHibeY 本地冒烟测试（在开发机上运行，无需真实磁盘）
+YYHomeFNAsst 本地冒烟测试（在开发机上运行，无需真实磁盘）
 通过模拟 lsblk / hdparm 的输出，验证后端完整逻辑链与 HTTP 接口。
 用法：python tools/test_mock.py
 """
@@ -14,7 +14,7 @@ import urllib.request
 import urllib.error
 
 SERVICE_DIR = os.path.normpath(os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "DiskHibeY", "app", "service"))
+    os.path.dirname(os.path.abspath(__file__)), "..", "YYHomeFNAsst", "app", "service"))
 sys.path.insert(0, SERVICE_DIR)
 
 import main  # noqa: E402
@@ -224,7 +224,7 @@ def test_http():
         # 首页
         with urllib.request.urlopen("http://127.0.0.1:18327/", timeout=5) as resp:
             html = resp.read().decode()
-        check("GET / 返回前端页面", "DiskHibeY" in html and "立即休眠" in html)
+        check("GET / 返回前端页面", "YYHomeFNAsst" in html and "立即休眠" in html)
         check("前端页面包含版本号显示", "V0.0.2" in html and "verBadge" in html)
 
         # 版本接口
@@ -259,7 +259,7 @@ def test_http():
 
 
 if __name__ == "__main__":
-    print("DiskHibeY 冒烟测试（模拟环境）")
+    print("YYHomeFNAsst 冒烟测试（模拟环境）")
     by_name = test_list_and_state()
     test_sleep(by_name)
     test_http()
