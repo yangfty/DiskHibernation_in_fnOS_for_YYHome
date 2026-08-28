@@ -36,6 +36,7 @@ INCLUDE = [
     "YYHomeFNAsst",
     "tools/test_mock.py",
     "tools/upload_github.py",
+    "tools/release_github.py",
     "com.yyhome.fnasst.fpk",
 ]
 # 排除项：目录名 / 文件扩展名
