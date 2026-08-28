@@ -1,0 +1,14 @@
+#!/bin/bash
+# YYHomeFNAsst 卸载前停止服务
+
+PID_FILE="${TRIM_PKGVAR}/app.pid"
+if [ -n "${TRIM_PKGVAR}" ] && [ -f "$PID_FILE" ]; then
+    pid=$(cat "$PID_FILE" 2>/dev/null | tr -d '[:space:]')
+    if [ -n "$pid" ]; then
+        kill "$pid" 2>/dev/null
+        sleep 1
+        kill -9 "$pid" 2>/dev/null
+    fi
+    rm -f "$PID_FILE"
+fi
+exit 0
