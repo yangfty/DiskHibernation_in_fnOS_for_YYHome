@@ -1,0 +1,8 @@
+#!/bin/bash
+# YYHomeFNAsst 卸载完成后的清理
+
+if [ -n "${TRIM_PKGVAR}" ]; then
+    rm -f "${TRIM_PKGVAR}/app.pid" 2>/dev/null
+    rm -f "${TRIM_PKGVAR}/server.log" 2>/dev/null
+fi
+exit 0
