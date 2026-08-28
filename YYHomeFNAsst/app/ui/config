@@ -1,0 +1,13 @@
+{
+  ".url": {
+    "com.yyhome.fnasst.main": {
+      "title": "YYHomeFNAsst",
+      "icon": "images/icon-{0}.png",
+      "type": "url",
+      "protocol": "http",
+      "port": "8327",
+      "url": "/",
+      "allUsers": true
+    }
+  }
+}
