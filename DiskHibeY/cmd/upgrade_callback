@@ -1,4 +1,0 @@
-#!/bin/bash
-# DiskHibeY 升级完成后无需额外处理
-
-exit 0
