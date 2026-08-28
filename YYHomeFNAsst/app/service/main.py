@@ -24,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import urllib.parse
 
 APP_NAME = "YYHomeFNAsst"
-APP_VERSION = "0.0.3"
+APP_VERSION = "0.0.4"
 DEFAULT_PORT = 8327
 PORT = int(os.environ.get("YYHOMEFNASST_PORT", str(DEFAULT_PORT)))
 
@@ -110,13 +110,14 @@ def _default_disk_cfg():
         "space_enabled": False,     # 是否开启空间清理
         "space_threshold_gb": 20,   # 剩余空间低于该值（GB）时触发清理
         "space_path": "",           # 监控目录（绝对路径）
+        "space_check_time": "00:00",  # 每天空间清理检查时间（每盘独立）
         "space_last": None,         # 上次清理结果
         "space_last_date": "",      # 上次自动检查日期（YYYY-MM-DD）
     }
 
 
 def _default_config():
-    return {"version": 1, "space_check_time": "00:00", "disks": {}}
+    return {"version": 1, "disks": {}}
 
 
 def _sanitize_disk_cfg(dc):
@@ -137,6 +138,8 @@ def _sanitize_disk_cfg(dc):
     p = dc.get("space_path")
     if isinstance(p, str) and p.strip() and os.path.isabs(p.strip()) and p.strip() not in ("/", "\\"):
         out["space_path"] = os.path.normpath(p.strip())
+    if _parse_hhmm(dc.get("space_check_time")):
+        out["space_check_time"] = dc["space_check_time"].strip()
     # 运行时状态字段直接透传
     for k in ("sleep_daily_last", "space_last_date", "space_last"):
         if k in dc:
@@ -154,13 +157,19 @@ def load_config():
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                     raw = json.load(f)
                 if isinstance(raw, dict):
-                    if _parse_hhmm(raw.get("space_check_time")):
-                        cfg["space_check_time"] = raw["space_check_time"].strip()
+                    # 迁移：V0.0.3 及之前空间检查时间是全局配置，
+                    # 下放到当时没有单独设置检查时间的硬盘
+                    legacy_global_time = raw.get("space_check_time")
+                    if not (isinstance(legacy_global_time, str) and _parse_hhmm(legacy_global_time)):
+                        legacy_global_time = None
                     disks = raw.get("disks")
                     if isinstance(disks, dict):
                         for disk_id, dc in disks.items():
                             if isinstance(dc, dict):
-                                cfg["disks"][disk_id] = _sanitize_disk_cfg(dc)
+                                san = _sanitize_disk_cfg(dc)
+                                if legacy_global_time and "space_check_time" not in dc:
+                                    san["space_check_time"] = legacy_global_time.strip()
+                                cfg["disks"][disk_id] = san
             except (OSError, ValueError):
                 pass  # 配置缺失或损坏时使用默认值
             _CONFIG = cfg
@@ -185,12 +194,6 @@ def update_config(body):
     with _CONFIG_LOCK:
         cfg = load_config()
         new_cfg = json.loads(json.dumps(cfg))  # 深拷贝，校验全部通过才生效
-
-        st = body.get("space_check_time")
-        if st is not None:
-            if not _parse_hhmm(st):
-                return False, "空间检查时间格式无效（应为 HH:MM）"
-            new_cfg["space_check_time"] = st.strip()
 
         disks = body.get("disks")
         if isinstance(disks, dict):
@@ -226,6 +229,11 @@ def update_config(body):
                     if not isinstance(p, str) or (p.strip() and not os.path.isabs(p.strip())):
                         return False, "监控目录必须是绝对路径（以 / 开头）"
                     cur["space_path"] = p.strip()
+                if "space_check_time" in dc:
+                    if not _parse_hhmm(dc["space_check_time"]):
+                        return False, "空间检查时间格式无效（应为 HH:MM）"
+                    cur["space_check_time"] = dc["space_check_time"].strip()
+                    cur["space_last_date"] = ""  # 时间修改后允许当天重新触发
                 new_cfg["disks"][disk_id] = cur
 
         global _CONFIG
@@ -633,7 +641,7 @@ SCHED_INTERVAL = 20  # 调度器轮询间隔（秒）
 
 
 def _scheduler_tick():
-    """单次调度：处理每块硬盘的定时休眠与空间清理任务"""
+    """单次调度：处理每块硬盘的定时休眠与空间清理任务（均为每盘独立配置）"""
     cfg = load_config()
     active = {k: v for k, v in cfg["disks"].items()
               if v.get("sleep_mode") != "off" or v.get("space_enabled")}
@@ -672,19 +680,13 @@ def _scheduler_tick():
                 log("定时休眠 %s：%s" % (disk["path"], r.get("message")))
                 _sched_update_disk(disk["id"], sleep_daily_last=today)
 
-    # ---- 空间清理（全局检查时间，每天一次）----
-    hm = _parse_hhmm(cfg.get("space_check_time"))
-    if not hm or now_min < hm[0] * 60 + hm[1]:
-        return
-    for disk in disks:
-        dcfg = active.get(disk["id"])
-        if not dcfg or not dcfg.get("space_enabled") or not dcfg.get("space_path"):
-            continue
-        if dcfg.get("space_last_date") == today:
-            continue
-        r = run_space_check(disk["id"])
-        log("空间清理 %s：%s" % (disk["path"], r.get("message")))
-        _sched_update_disk(disk["id"], space_last_date=today)
+        # ---- 空间清理（每盘独立检查时间，每天一次）----
+        if dcfg.get("space_enabled") and dcfg.get("space_path"):
+            hm = _parse_hhmm(dcfg.get("space_check_time"))
+            if hm and now_min >= hm[0] * 60 + hm[1] and dcfg.get("space_last_date") != today:
+                r = run_space_check(disk["id"])
+                log("空间清理 %s：%s" % (disk["path"], r.get("message")))
+                _sched_update_disk(disk["id"], space_last_date=today)
 
 
 def _scheduler_loop():
