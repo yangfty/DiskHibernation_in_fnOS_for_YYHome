@@ -2,7 +2,7 @@
 
 飞牛 fnOS 硬盘休眠与监控空间管理工具
 
-[![Version](https://img.shields.io/badge/version-0.0.3-blue)](https://github.com/yangfty/YYHomeFNAsst)
+[![Version](https://img.shields.io/badge/version-0.0.4-blue)](https://github.com/yangfty/YYHomeFNAsst)
 [![Platform](https://img.shields.io/badge/platform-fnOS%20%3E%3D%200.9.27-green)](https://www.fnnas.com/)
 [![License](https://img.shields.io/badge/license-MIT-orange)](#)
 
@@ -22,7 +22,7 @@
   - `空闲后自动` —— 硬盘持续非休眠超过 N 分钟后自动休眠（默认 30 分钟）
 
 ### 监控空间自动清理
-- 每块硬盘可单独开启，自定义保留空间阈值（如剩 20 GB）与监控目录
+- 每块硬盘可单独开启，自定义保留空间阈值（如剩 20 GB）、监控目录与**每天检查时间**（各硬盘独立设置）
 - 剩余空间不足时，**递归扫描**监控目录下所有以日期命名的文件夹（如小米摄像头的 `2026062107`），**跨摄像头按日期从早到晚**依次删除，直到剩余空间高于阈值
 - 每天定时检查（默认 00:00，可自定义），也支持手动「立即检查一次」
 - 只删除纯数字日期命名的文件夹，其他文件和目录一律不动
@@ -32,7 +32,8 @@
 
 | 版本 | 下载 | 说明 |
 |---|---|---|
-| V0.0.3（最新） | [YYHomeFNAsst-0.0.3.fpk](https://github.com/yangfty/YYHomeFNAsst/releases/download/v0.0.3/YYHomeFNAsst-0.0.3.fpk) | 定时休眠 + 监控空间清理 |
+| V0.0.4（最新） | [YYHomeFNAsst-0.0.4.fpk](https://github.com/yangfty/YYHomeFNAsst/releases/download/v0.0.4/YYHomeFNAsst-0.0.4.fpk) | 每盘独立检查时间 + UI 优化 + 新图标 |
+| V0.0.3 | [YYHomeFNAsst-0.0.3.fpk](https://github.com/yangfty/YYHomeFNAsst/releases/download/v0.0.3/YYHomeFNAsst-0.0.3.fpk) | 定时休眠 + 监控空间清理 |
 | V0.0.2 | [YYHomeFNAsst-0.0.2.fpk](https://github.com/yangfty/YYHomeFNAsst/releases/download/v0.0.2/YYHomeFNAsst-0.0.2.fpk) | 基础版：状态查询 + 一键休眠 |
 
 更多历史版本请前往 [Releases 页面](https://github.com/yangfty/YYHomeFNAsst/releases)。
@@ -59,8 +60,7 @@
 |---|---|
 | 查看硬盘状态 | 打开应用，卡片实时显示电源状态与可用空间 |
 | 立即休眠 | 硬盘卡片 →「立即休眠」 |
-| 设置定时休眠 / 空间清理 | 硬盘卡片 →「定时任务」 |
-| 修改全局清理检查时间 | 右上角 →「定时设置」 |
+| 设置定时休眠 / 空间清理 / 每天检查时间 | 硬盘卡片 →「定时任务」（各硬盘独立设置） |
 | 手动清理一次 | 定时任务弹窗 →「立即检查一次」 |
 
 ### 监控目录示例（小米摄像头）
@@ -86,6 +86,11 @@
 - **空间清理会永久删除监控目录下的日期文件夹**，请确认监控目录路径填写正确后再开启
 
 ## 更新日志
+
+### V0.0.4
+- 空间清理检查时间改为**每块硬盘独立设置**（移除原右上角全局「定时设置」入口，旧配置自动迁移）
+- 界面整体优化：硬盘卡片顶部状态色条、弹窗分区图标、移动端按钮布局，风格更统一
+- 重新设计应用图标：填满整个图标空间，与 fnOS 风格更统一
 
 ### V0.0.3
 - 新增定时休眠：每块硬盘可单独设置「每天定时」或「空闲后自动」休眠
