@@ -8,11 +8,14 @@ fnOS 硬盘休眠管理后端服务（零依赖，仅使用 Python3 标准库）
 - 自动识别系统中的物理硬盘（lsblk，按序列号/WWN 定位，不依赖固定 /dev/sdX）
 - 查询硬盘电源状态（hdparm -C）
 - 让指定硬盘立即休眠（hdparm -y），执行后自动复查状态
+- 硬盘定时休眠：每天定时 / 空闲一段时间后自动发送休眠指令
+- 监控空间清理：剩余空间低于阈值时，自动删除日期最早的录像文件夹
 """
 
 import json
 import os
 import re
+import shutil
 import subprocess
 import threading
 import time
@@ -21,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import urllib.parse
 
 APP_NAME = "YYHomeFNAsst"
-APP_VERSION = "0.0.2"
+APP_VERSION = "0.0.3"
 DEFAULT_PORT = 8327
 PORT = int(os.environ.get("YYHOMEFNASST_PORT", str(DEFAULT_PORT)))
 
@@ -53,6 +56,191 @@ HDPARM_STATE_MAP = {
 
 # 每块硬盘最近一次休眠指令的执行结果（仅保存在内存中，服务重启后清空）
 _LAST_SLEEP = {}
+
+
+# ---------------------------------------------------------------- 配置管理
+
+# 配置/运行时数据目录：优先使用 fnOS 注入的 TRIM_PKGVAR，
+# 开发机上可通过 YYHOMEFNASST_VAR 环境变量覆盖
+VAR_DIR = (os.environ.get("YYHOMEFNASST_VAR")
+           or os.environ.get("TRIM_PKGVAR")
+           or "/tmp/fnasst")
+CONFIG_FILE = os.path.join(VAR_DIR, "config.json")
+
+_CONFIG_LOCK = threading.RLock()
+_CONFIG = None
+
+SLEEP_MODES = ("off", "idle", "daily")  # 关闭 / 空闲后自动 / 每天定时
+
+
+def _parse_hhmm(s):
+    """校验 HH:MM 格式，返回 (时, 分) 或 None"""
+    if isinstance(s, str):
+        m = re.match(r"^(\d{1,2}):(\d{2})$", s.strip())
+        if m:
+            h, mi = int(m.group(1)), int(m.group(2))
+            if 0 <= h <= 23 and 0 <= mi <= 59:
+                return h, mi
+    return None
+
+
+def _to_int(v, lo, hi):
+    try:
+        n = int(v)
+    except (TypeError, ValueError):
+        return None
+    return n if lo <= n <= hi else None
+
+
+def _to_float(v, lo, hi):
+    try:
+        n = float(v)
+    except (TypeError, ValueError):
+        return None
+    return n if lo <= n <= hi else None
+
+
+def _default_disk_cfg():
+    """单块硬盘的任务配置默认值"""
+    return {
+        "sleep_mode": "off",        # off / idle / daily
+        "sleep_idle_min": 30,       # idle 模式：持续非休眠 N 分钟后自动休眠
+        "sleep_daily_at": "02:00",  # daily 模式：每天定时休眠时间
+        "sleep_daily_last": "",     # daily 模式：上次执行日期（YYYY-MM-DD）
+        "space_enabled": False,     # 是否开启空间清理
+        "space_threshold_gb": 20,   # 剩余空间低于该值（GB）时触发清理
+        "space_path": "",           # 监控目录（绝对路径）
+        "space_last": None,         # 上次清理结果
+        "space_last_date": "",      # 上次自动检查日期（YYYY-MM-DD）
+    }
+
+
+def _default_config():
+    return {"version": 1, "space_check_time": "00:00", "disks": {}}
+
+
+def _sanitize_disk_cfg(dc):
+    """把外部（配置文件/请求体）的硬盘配置规范化为完整结构，非法值回退默认值"""
+    out = _default_disk_cfg()
+    if dc.get("sleep_mode") in SLEEP_MODES:
+        out["sleep_mode"] = dc["sleep_mode"]
+    v = _to_int(dc.get("sleep_idle_min"), 1, 1440)
+    if v is not None:
+        out["sleep_idle_min"] = v
+    if _parse_hhmm(dc.get("sleep_daily_at")):
+        out["sleep_daily_at"] = dc["sleep_daily_at"].strip()
+    if isinstance(dc.get("space_enabled"), bool):
+        out["space_enabled"] = dc["space_enabled"]
+    v = _to_float(dc.get("space_threshold_gb"), 1, 100000)
+    if v is not None:
+        out["space_threshold_gb"] = v
+    p = dc.get("space_path")
+    if isinstance(p, str) and p.strip() and os.path.isabs(p.strip()) and p.strip() not in ("/", "\\"):
+        out["space_path"] = os.path.normpath(p.strip())
+    # 运行时状态字段直接透传
+    for k in ("sleep_daily_last", "space_last_date", "space_last"):
+        if k in dc:
+            out[k] = dc[k]
+    return out
+
+
+def load_config():
+    """加载配置（内存缓存，首次从磁盘读取）"""
+    global _CONFIG
+    with _CONFIG_LOCK:
+        if _CONFIG is None:
+            cfg = _default_config()
+            try:
+                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                    raw = json.load(f)
+                if isinstance(raw, dict):
+                    if _parse_hhmm(raw.get("space_check_time")):
+                        cfg["space_check_time"] = raw["space_check_time"].strip()
+                    disks = raw.get("disks")
+                    if isinstance(disks, dict):
+                        for disk_id, dc in disks.items():
+                            if isinstance(dc, dict):
+                                cfg["disks"][disk_id] = _sanitize_disk_cfg(dc)
+            except (OSError, ValueError):
+                pass  # 配置缺失或损坏时使用默认值
+            _CONFIG = cfg
+        return _CONFIG
+
+
+def save_config():
+    """把当前配置写入磁盘（原子替换）"""
+    with _CONFIG_LOCK:
+        try:
+            os.makedirs(VAR_DIR, exist_ok=True)
+            tmp = CONFIG_FILE + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(_CONFIG, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, CONFIG_FILE)
+        except OSError as e:
+            log("配置保存失败：%s" % e)
+
+
+def update_config(body):
+    """根据请求体合并更新配置。返回 (ok, message)"""
+    with _CONFIG_LOCK:
+        cfg = load_config()
+        new_cfg = json.loads(json.dumps(cfg))  # 深拷贝，校验全部通过才生效
+
+        st = body.get("space_check_time")
+        if st is not None:
+            if not _parse_hhmm(st):
+                return False, "空间检查时间格式无效（应为 HH:MM）"
+            new_cfg["space_check_time"] = st.strip()
+
+        disks = body.get("disks")
+        if isinstance(disks, dict):
+            for disk_id, dc in disks.items():
+                if not disk_id or not isinstance(dc, dict):
+                    continue
+                cur = new_cfg["disks"].get(disk_id) or _default_disk_cfg()
+                if "sleep_mode" in dc:
+                    if dc["sleep_mode"] not in SLEEP_MODES:
+                        return False, "休眠模式无效"
+                    cur["sleep_mode"] = dc["sleep_mode"]
+                if "sleep_idle_min" in dc:
+                    v = _to_int(dc["sleep_idle_min"], 1, 1440)
+                    if v is None:
+                        return False, "空闲分钟数应在 1-1440 之间"
+                    cur["sleep_idle_min"] = v
+                if "sleep_daily_at" in dc:
+                    if not _parse_hhmm(dc["sleep_daily_at"]):
+                        return False, "定时休眠时间格式无效（应为 HH:MM）"
+                    cur["sleep_daily_at"] = dc["sleep_daily_at"].strip()
+                    cur["sleep_daily_last"] = ""  # 时间修改后允许当天重新触发
+                if "space_enabled" in dc:
+                    if not isinstance(dc["space_enabled"], bool):
+                        return False, "空间清理开关应为布尔值"
+                    cur["space_enabled"] = dc["space_enabled"]
+                if "space_threshold_gb" in dc:
+                    v = _to_float(dc["space_threshold_gb"], 1, 100000)
+                    if v is None:
+                        return False, "保留空间阈值应在 1-100000 GB 之间"
+                    cur["space_threshold_gb"] = v
+                if "space_path" in dc:
+                    p = dc["space_path"]
+                    if not isinstance(p, str) or (p.strip() and not os.path.isabs(p.strip())):
+                        return False, "监控目录必须是绝对路径（以 / 开头）"
+                    cur["space_path"] = p.strip()
+                new_cfg["disks"][disk_id] = cur
+
+        global _CONFIG
+        _CONFIG = new_cfg
+        save_config()
+    return True, "配置已保存"
+
+
+def _sched_update_disk(disk_id, **fields):
+    """调度器更新单块硬盘的运行时状态字段并持久化"""
+    with _CONFIG_LOCK:
+        cfg = load_config()
+        dcfg = cfg["disks"].setdefault(disk_id, _default_disk_cfg())
+        dcfg.update(fields)
+        save_config()
 
 
 def _now_hms():
@@ -218,6 +406,22 @@ def query_power_state(path):
     return "error", _translate_hdparm_error(code, detail)
 
 
+def _fs_free_bytes(path):
+    """返回指定路径所在文件系统的可用空间（字节）"""
+    st = os.statvfs(path)
+    return st.f_bavail * st.f_frsize
+
+
+def _disk_free_bytes(disk):
+    """取硬盘第一个挂载点所在文件系统的可用空间，失败返回 None"""
+    for mp in disk.get("mountpoints") or []:
+        try:
+            return _fs_free_bytes(mp)
+        except (OSError, AttributeError):
+            continue
+    return None
+
+
 def get_all_disks():
     """列出全部硬盘并并发查询电源状态"""
     disks, err = list_disks()
@@ -237,6 +441,7 @@ def get_all_disks():
             list(pool.map(check, disks))
     for disk in disks:
         disk["last_sleep"] = _LAST_SLEEP.get(disk["id"])
+        disk["free_bytes"] = _disk_free_bytes(disk)
     return disks, None
 
 
@@ -313,6 +518,191 @@ def do_sleep(disk_id):
                 "detail": cmd_detail}
 
 
+# ---------------------------------------------------------------- 空间清理
+
+# 日期命名目录：如 20260621、2026062107、20260621073030（小米摄像头录像文件夹）
+_DATE_DIR_RE = re.compile(r"^\d{8,14}$")
+
+
+def _dir_size(path):
+    """统计目录占用空间（字节）"""
+    total = 0
+    for dirpath, _dirnames, filenames in os.walk(path):
+        for fn in filenames:
+            try:
+                total += os.lstat(os.path.join(dirpath, fn)).st_size
+            except OSError:
+                pass
+    return total
+
+
+def _find_date_dirs(root):
+    """递归找出所有以日期命名的目录，按日期从早到晚排序（跨摄像头全局排序）"""
+    found = []
+    for dirpath, dirnames, _filenames in os.walk(root):
+        for d in dirnames:
+            if _DATE_DIR_RE.match(d):
+                found.append(os.path.join(dirpath, d))
+    found.sort(key=lambda p: (os.path.basename(p), p))
+    return found
+
+
+def _record_space_result(disk_id, manual, free_before, free, threshold_bytes, deleted, message, ok=True):
+    """把清理结果写入配置（持久化，供前端展示）并返回结果"""
+    result = {
+        "time": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "manual": bool(manual),
+        "ok": bool(ok),
+        "free_before": free_before,
+        "free_after": free,
+        "threshold_bytes": threshold_bytes,
+        "deleted": deleted,
+        "message": message,
+    }
+    with _CONFIG_LOCK:
+        cfg = load_config()
+        dcfg = cfg["disks"].setdefault(disk_id, _default_disk_cfg())
+        dcfg["space_last"] = result
+        save_config()
+    return result
+
+
+def run_space_check(disk_id, manual=False):
+    """执行一次空间清理：剩余空间低于阈值时，删除日期最早的监控文件夹
+
+    只会删除监控目录下以纯数字日期命名（8-14 位，如 2026062107）的文件夹，
+    从最早开始删，直到剩余空间不低于阈值或无文件夹可删。
+    """
+    cfg = load_config()
+    dcfg = cfg["disks"].get(disk_id)
+    if not dcfg:
+        return {"ok": False, "message": "未找到该硬盘的任务配置，请先保存设置"}
+    path = (dcfg.get("space_path") or "").strip()
+    threshold_gb = float(dcfg.get("space_threshold_gb") or 20)
+    if not path:
+        return {"ok": False, "message": "尚未设置监控目录"}
+    if not os.path.isabs(path) or path in ("/", "\\"):
+        return {"ok": False, "message": "监控目录无效：%s" % path}
+    if not os.path.isdir(path):
+        return {"ok": False, "message": "监控目录不存在：%s" % path}
+    threshold_bytes = int(threshold_gb * 1024 ** 3)
+
+    try:
+        free_before = _fs_free_bytes(path)
+    except (OSError, AttributeError) as e:
+        return {"ok": False, "message": "无法读取剩余空间：%s" % e}
+
+    deleted = []
+    free = free_before
+    try:
+        for d in _find_date_dirs(path):
+            if free >= threshold_bytes:
+                break
+            size = _dir_size(d)
+            shutil.rmtree(d)
+            deleted.append({
+                "name": os.path.relpath(d, path).replace(os.sep, "/"),
+                "size": size,
+            })
+            free = _fs_free_bytes(path)
+    except OSError as e:
+        return _record_space_result(
+            disk_id, manual, free_before, free, threshold_bytes, deleted,
+            "清理中断：%s" % e, ok=False)
+
+    if deleted:
+        message = "已删除 %d 个最早的录像文件夹，释放 %.1f GB，当前剩余 %.1f GB" % (
+            len(deleted), (free - free_before) / 1024 ** 3, free / 1024 ** 3)
+        if free < threshold_bytes:
+            message += "，仍低于阈值 %.0f GB（监控目录内已没有可删除的日期文件夹）" % threshold_gb
+    elif free < threshold_bytes:
+        message = "剩余空间 %.1f GB 低于阈值 %.0f GB，但监控目录内已没有可删除的日期文件夹" % (
+            free / 1024 ** 3, threshold_gb)
+    else:
+        message = "剩余空间 %.1f GB，高于阈值 %.0f GB，无需清理" % (
+            free / 1024 ** 3, threshold_gb)
+    result = _record_space_result(
+        disk_id, manual, free_before, free, threshold_bytes, deleted, message)
+    return result
+
+
+# ---------------------------------------------------------------- 后台调度
+
+_AWAKE_SINCE = {}   # idle 模式：硬盘持续处于非休眠状态的起始时间戳
+SCHED_INTERVAL = 20  # 调度器轮询间隔（秒）
+
+
+def _scheduler_tick():
+    """单次调度：处理每块硬盘的定时休眠与空间清理任务"""
+    cfg = load_config()
+    active = {k: v for k, v in cfg["disks"].items()
+              if v.get("sleep_mode") != "off" or v.get("space_enabled")}
+    if not active:
+        return
+    disks, err = list_disks()
+    if err:
+        return
+
+    now = time.localtime()
+    now_min = now.tm_hour * 60 + now.tm_min
+    today = time.strftime("%Y-%m-%d")
+
+    for disk in disks:
+        dcfg = active.get(disk["id"])
+        if not dcfg:
+            continue
+
+        # ---- 定时休眠 ----
+        mode = dcfg.get("sleep_mode")
+        if mode == "idle":
+            state, _ = query_power_state(disk["path"])
+            if state in ("standby", "sleeping"):
+                _AWAKE_SINCE.pop(disk["id"], None)
+            else:
+                start = _AWAKE_SINCE.setdefault(disk["id"], time.time())
+                need = int(dcfg.get("sleep_idle_min") or 30) * 60
+                if time.time() - start >= need:
+                    r = do_sleep(disk["id"])
+                    log("定时休眠 %s：%s" % (disk["path"], r.get("message")))
+                    _AWAKE_SINCE.pop(disk["id"], None)
+        elif mode == "daily":
+            hm = _parse_hhmm(dcfg.get("sleep_daily_at"))
+            if hm and now_min >= hm[0] * 60 + hm[1] and dcfg.get("sleep_daily_last") != today:
+                r = do_sleep(disk["id"])
+                log("定时休眠 %s：%s" % (disk["path"], r.get("message")))
+                _sched_update_disk(disk["id"], sleep_daily_last=today)
+
+    # ---- 空间清理（全局检查时间，每天一次）----
+    hm = _parse_hhmm(cfg.get("space_check_time"))
+    if not hm or now_min < hm[0] * 60 + hm[1]:
+        return
+    for disk in disks:
+        dcfg = active.get(disk["id"])
+        if not dcfg or not dcfg.get("space_enabled") or not dcfg.get("space_path"):
+            continue
+        if dcfg.get("space_last_date") == today:
+            continue
+        r = run_space_check(disk["id"])
+        log("空间清理 %s：%s" % (disk["path"], r.get("message")))
+        _sched_update_disk(disk["id"], space_last_date=today)
+
+
+def _scheduler_loop():
+    while True:
+        try:
+            _scheduler_tick()
+        except Exception as e:
+            log("后台调度异常：%s" % e)
+        time.sleep(SCHED_INTERVAL)
+
+
+def start_scheduler():
+    """启动后台调度线程（定时休眠 + 空间清理）"""
+    t = threading.Thread(target=_scheduler_loop, daemon=True, name="scheduler")
+    t.start()
+    return t
+
+
 # ---------------------------------------------------------------- HTTP 服务
 
 _INDEX_CACHE = {"data": None}
@@ -369,6 +759,8 @@ class Handler(BaseHTTPRequestHandler):
                     self._json({"ok": True, "disks": disks, "time": int(time.time())})
             elif route == "/api/about":
                 self._json({"ok": True, "name": APP_NAME, "version": APP_VERSION, "port": PORT})
+            elif route == "/api/config":
+                self._json({"ok": True, "config": load_config()})
             else:
                 self._json({"ok": False, "error": "接口不存在"}, 404)
         except (BrokenPipeError, ConnectionResetError):
@@ -386,6 +778,19 @@ class Handler(BaseHTTPRequestHandler):
                     self._json({"ok": False, "level": "error", "message": "缺少硬盘标识（id）"}, 400)
                     return
                 result = do_sleep(disk_id)
+                self._json(result, 200 if result.get("ok") else 400)
+            elif route == "/api/config":
+                ok, msg = update_config(self._read_body())
+                self._json({"ok": ok, "message": msg,
+                            "config": load_config() if ok else None},
+                           200 if ok else 400)
+            elif route == "/api/space_check":
+                body = self._read_body()
+                disk_id = str(body.get("id") or "").strip()
+                if not disk_id:
+                    self._json({"ok": False, "message": "缺少硬盘标识（id）"}, 400)
+                    return
+                result = run_space_check(disk_id, manual=True)
                 self._json(result, 200 if result.get("ok") else 400)
             else:
                 self._json({"ok": False, "error": "接口不存在"}, 404)
@@ -407,6 +812,7 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     server.daemon_threads = True
+    start_scheduler()
     log("%s v%s 服务已启动，监听端口 %d" % (APP_NAME, APP_VERSION, PORT))
     log("Web 界面：http://<NAS的IP>:%d/" % PORT)
     try:
