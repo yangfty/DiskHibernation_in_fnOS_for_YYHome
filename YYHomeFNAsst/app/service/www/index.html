@@ -199,11 +199,12 @@ header { display: flex; align-items: center; justify-content: space-between; gap
 }
 
 /* ---------- 休眠按钮 ---------- */
+.card-actions { margin-top: auto; display: flex; gap: 10px; }
 .btn-sleep {
-  margin-top: auto; border: none; cursor: pointer; font-family: inherit;
+  border: none; cursor: pointer; font-family: inherit; flex: 1;
   background: linear-gradient(135deg, #4d8bff 0%, #1f5cff 100%);
   color: #fff; font-size: 14px; font-weight: 700; letter-spacing: .5px;
-  padding: 11px 0; border-radius: 11px; width: 100%;
+  padding: 11px 0; border-radius: 11px; min-width: 0;
   display: flex; align-items: center; justify-content: center; gap: 8px;
   box-shadow: 0 6px 16px rgba(51, 112, 255, .28);
   transition: all .2s ease;
@@ -218,6 +219,119 @@ header { display: flex; align-items: center; justify-content: space-between; gap
   border: 2px solid rgba(255, 255, 255, .35); border-top-color: #fff;
   animation: spin .8s linear infinite;
 }
+
+/* ---------- 任务按钮（次级） ---------- */
+.btn-task {
+  border: 1px solid var(--border); background: var(--bg); color: var(--text);
+  font-size: 13px; font-weight: 600; padding: 11px 16px; border-radius: 11px;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 7px;
+  transition: all .2s ease; font-family: inherit; white-space: nowrap;
+}
+.btn-task svg { width: 15px; height: 15px; stroke: var(--muted); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.btn-task:hover { border-color: var(--primary); color: var(--primary); }
+.btn-task:hover svg { stroke: var(--primary); }
+.btn-task.on { border-color: var(--primary); color: var(--primary); background: var(--primary-weak); }
+.btn-task.on svg { stroke: var(--primary); }
+
+/* ---------- 弹窗 ---------- */
+.modal-mask {
+  position: fixed; inset: 0; z-index: 50; padding: 20px;
+  background: rgba(10, 14, 22, .48); backdrop-filter: blur(6px);
+  display: none; align-items: center; justify-content: center;
+}
+.modal-mask.show { display: flex; animation: fadeIn .18s ease; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.modal {
+  background: var(--card); border: 1px solid var(--border); border-radius: 18px;
+  box-shadow: 0 24px 64px rgba(16, 24, 40, .28);
+  width: 100%; max-width: 540px; max-height: calc(100vh - 40px);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: modalIn .28s cubic-bezier(.2, .8, .3, 1.1);
+}
+.modal.small { max-width: 400px; }
+@keyframes modalIn { from { opacity: 0; transform: translateY(16px) scale(.97); } to { opacity: 1; transform: none; } }
+.modal-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 20px 22px 0;
+}
+.modal-title { font-size: 16.5px; font-weight: 700; }
+.modal-sub { font-size: 12px; color: var(--muted); margin-top: 2px; word-break: break-all; }
+.modal-close {
+  border: none; background: var(--bg); color: var(--muted); width: 30px; height: 30px;
+  border-radius: 9px; font-size: 17px; line-height: 1; cursor: pointer; flex: none;
+  transition: all .2s ease;
+}
+.modal-close:hover { background: var(--er-bg); color: var(--er); }
+.modal-body { padding: 16px 22px 4px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.modal-foot {
+  display: flex; justify-content: flex-end; gap: 10px;
+  padding: 14px 22px 20px;
+}
+.btn-primary {
+  border: none; background: linear-gradient(135deg, #4d8bff 0%, #1f5cff 100%);
+  color: #fff; box-shadow: 0 4px 12px rgba(51, 112, 255, .3);
+}
+.btn-primary:hover { color: #fff; filter: brightness(1.05); }
+
+/* ---------- 弹窗内分区 ---------- */
+.sec { border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; background: var(--bg); }
+.sec-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.sec-title { font-size: 14px; font-weight: 700; }
+.sec-desc { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.sec-body { margin-top: 12px; display: flex; flex-direction: column; gap: 11px; }
+.sec-body.off { display: none; }
+.field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; font-weight: 600; }
+.field input[type="number"], .field input[type="time"], .field input[type="text"] {
+  width: 100%; border: 1px solid var(--border); background: var(--card); color: var(--text);
+  border-radius: 9px; padding: 9px 12px; font-size: 13.5px; font-family: inherit;
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+.field input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-weak); }
+.field input.mono-input { font-family: ui-monospace, "SF Mono", Consolas, Menlo, monospace; font-size: 12.5px; }
+.hint { font-size: 11.5px; color: var(--muted); line-height: 1.6; }
+.hint b { color: var(--text); }
+.radios { display: flex; gap: 8px; flex-wrap: wrap; }
+.radio-chip {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--card); color: var(--text);
+  padding: 7px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+  transition: all .2s ease;
+}
+.radio-chip input { display: none; }
+.radio-chip.on { border-color: var(--primary); color: var(--primary); background: var(--primary-weak); }
+
+/* ---------- 开关 ---------- */
+.switch { position: relative; display: inline-block; width: 42px; height: 24px; flex: none; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch span {
+  position: absolute; inset: 0; background: var(--uk-bg); border-radius: 999px;
+  transition: .25s ease; cursor: pointer;
+}
+.switch span::before {
+  content: ""; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px;
+  border-radius: 50%; background: #fff; transition: .25s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .3);
+}
+.switch input:checked + span { background: var(--primary); }
+.switch input:checked + span::before { transform: translateX(18px); }
+
+/* ---------- 上次清理结果 ---------- */
+.last-result {
+  font-size: 12.5px; border-radius: 10px; padding: 10px 12px;
+  background: var(--card); border: 1px solid var(--border); line-height: 1.6;
+}
+.last-result .lr-title { font-weight: 700; margin-bottom: 3px; }
+.last-result .lr-ok { color: var(--ok); }
+.last-result .lr-bad { color: var(--er); }
+.last-result ul { margin: 4px 0 0 16px; color: var(--muted); font-size: 12px; }
+.btn-check {
+  border: 1px solid var(--primary); background: var(--primary-weak); color: var(--primary);
+  font-size: 13px; font-weight: 700; padding: 9px 16px; border-radius: 10px;
+  cursor: pointer; font-family: inherit; transition: all .2s ease;
+  display: inline-flex; align-items: center; gap: 7px; align-self: flex-start;
+}
+.btn-check:hover { filter: brightness(1.05); }
+.btn-check:disabled { opacity: .6; cursor: wait; }
 
 /* ---------- 空状态 / 骨架屏 ---------- */
 .empty {
@@ -275,13 +389,17 @@ footer .divider { margin: 0 8px; opacity: .5; }
       <div>
         <div class="title-row">
           <h1>YYHomeFNAsst</h1>
-          <span class="ver" id="verBadge">V0.0.2</span>
+          <span class="ver" id="verBadge">V0.0.3</span>
         </div>
         <div class="sub">硬盘休眠管理 · DiskHibernation in fnOS for YYHome</div>
       </div>
     </div>
     <div class="head-actions">
       <span class="updated" id="updated"></span>
+      <button class="btn" id="globalBtn" onclick="openGlobalModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        定时设置
+      </button>
       <button class="btn" id="refreshBtn" onclick="refresh()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
         刷新状态
@@ -298,12 +416,106 @@ footer .divider { margin: 0 8px; opacity: .5; }
   <div class="grid" id="grid"></div>
 
   <footer>
-    <span id="verFooter">YYHomeFNAsst V0.0.2</span><span class="divider">·</span>仅执行一次性 hdparm -y 休眠指令，不修改 fnOS 系统的自动休眠设置<span class="divider">·</span>状态通过 hdparm -C 查询
-    <br>部分 USB 桥接芯片不支持状态查询，或会在查询时唤醒硬盘，属正常现象；状态显示"未知"的硬盘通常仍可正常休眠
+    <span id="verFooter">YYHomeFNAsst V0.0.3</span><span class="divider">·</span>支持立即休眠、定时休眠与监控空间自动清理<span class="divider">·</span>不会修改 fnOS 系统自带的自动休眠设置
+    <br>空间清理只会删除监控目录下以日期命名的文件夹（如 2026062107），从最早开始删；部分 USB 桥接芯片不支持状态查询，或会在查询时唤醒硬盘，属正常现象
   </footer>
 </div>
 
 <div id="toast"><span class="t-dot"></span><span id="toastText"></span></div>
+
+<!-- 单块硬盘的定时任务弹窗 -->
+<div class="modal-mask" id="taskModal" onclick="maskClose(event, 'taskModal')">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">定时任务</div>
+        <div class="modal-sub mono" id="tmSub"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('taskModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="sec">
+        <div class="sec-head">
+          <div>
+            <div class="sec-title">定时休眠</div>
+            <div class="sec-desc">按计划自动向该硬盘发送休眠指令</div>
+          </div>
+          <label class="switch"><input type="checkbox" id="tmSleepOn" onchange="toggleSec('tmSleepOn', 'tmSleepBody')"><span></span></label>
+        </div>
+        <div class="sec-body off" id="tmSleepBody">
+          <div class="radios">
+            <label class="radio-chip on" id="tmModeDaily" onclick="setSleepMode('daily')"><input type="radio" name="tmSleepMode" value="daily" checked>每天定时</label>
+            <label class="radio-chip" id="tmModeIdle" onclick="setSleepMode('idle')"><input type="radio" name="tmSleepMode" value="idle">空闲后自动</label>
+          </div>
+          <div class="field" id="tmDailyRow">
+            <label>每天于该时间发送休眠指令</label>
+            <input type="time" id="tmDailyAt" value="02:00">
+          </div>
+          <div class="field" id="tmIdleRow" style="display:none">
+            <label>持续处于非休眠状态超过此分钟数后，自动休眠</label>
+            <input type="number" id="tmIdleMin" min="1" max="1440" value="30">
+          </div>
+          <div class="hint">提示：部分 USB 桥接芯片在查询状态时会被唤醒，「空闲后自动」模式对此类硬盘可能无效，建议改用「每天定时」。</div>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="sec-head">
+          <div>
+            <div class="sec-title">监控空间清理</div>
+            <div class="sec-desc">剩余空间不足时，自动删除日期最早的录像文件夹</div>
+          </div>
+          <label class="switch"><input type="checkbox" id="tmSpaceOn" onchange="toggleSec('tmSpaceOn', 'tmSpaceBody')"><span></span></label>
+        </div>
+        <div class="sec-body off" id="tmSpaceBody">
+          <div class="field">
+            <label>剩余空间低于（GB）时触发清理</label>
+            <input type="number" id="tmThreshold" min="1" max="100000" value="20">
+          </div>
+          <div class="field">
+            <label>监控目录（绝对路径）</label>
+            <input type="text" id="tmSpacePath" class="mono-input" placeholder="/vol1/1000/监控-小米摄像2云台版/xiaomi_camera_videos">
+            <div class="hint">将递归删除该目录下所有以日期命名的文件夹（如 <b>2026062107</b>），从最早开始删，直到剩余空间高于阈值。每天于 <b id="tmCheckTimeHint">00:00</b> 自动检查（可在右上角「定时设置」中修改）。</div>
+          </div>
+          <div id="tmSpaceLastWrap"></div>
+          <button class="btn-check" id="tmCheckBtn" onclick="runSpaceCheckNow()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+            立即检查一次（会先保存当前设置）
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal('taskModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveTaskModal()">保存任务</button>
+    </div>
+  </div>
+</div>
+
+<!-- 全局定时设置弹窗 -->
+<div class="modal-mask" id="globalModal" onclick="maskClose(event, 'globalModal')">
+  <div class="modal small">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">定时设置</div>
+        <div class="modal-sub">全局清理计划，对所有已开启空间清理的硬盘生效</div>
+      </div>
+      <button class="modal-close" onclick="closeModal('globalModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="sec">
+        <div class="field" style="margin:0">
+          <label>每天空间清理检查时间</label>
+          <input type="time" id="gmCheckTime" value="00:00">
+          <div class="hint" style="margin-top:7px">到达该时间后，后台会对所有已开启空间清理的硬盘执行一次检查；每块硬盘的定时休眠时间在各自的「定时任务」中设置。</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal('globalModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveGlobalModal()">保存</button>
+    </div>
+  </div>
+</div>
 
 <script>
 "use strict";
@@ -311,6 +523,8 @@ footer .divider { margin: 0 8px; opacity: .5; }
 var DISKS = [];
 var BUSY = {};   // 正在执行休眠操作的硬盘 id
 var REFRESHING = false;
+var CONFIG = { space_check_time: "00:00", disks: {} };
+var TASK_DISK = null;  // 当前打开任务弹窗的硬盘 id
 
 var STATE_LABEL = { active: "运行中", idle: "空闲", standby: "已休眠", sleeping: "深度睡眠", unknown: "未知", error: "查询失败" };
 var STATE_TIP = {
@@ -326,6 +540,14 @@ var TRANSPORT_LABEL = { sata: "SATA", usb: "USB", sas: "SAS", scsi: "SCSI", ata:
 var ICON_DISK = '<svg viewBox="0 0 24 24"><line x1="22" y1="12" x2="2" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/></svg>';
 var ICON_MOON = '<svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
 var ICON_EMPTY = '<svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>';
+var ICON_TASK = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>';
+
+function diskCfg(id) {
+  var c = CONFIG.disks[id];
+  if (c) return c;
+  return { sleep_mode: "off", sleep_idle_min: 30, sleep_daily_at: "02:00",
+           space_enabled: false, space_threshold_gb: 20, space_path: "", space_last: null };
+}
 
 function esc(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -380,13 +602,23 @@ function cardHtml(d, idx) {
   var kind = d.rotational ? "HDD 机械盘" : "SSD 固态盘";
   var busy = !!BUSY[d.id];
   var asleep = d.state === "standby" || d.state === "sleeping";
+  var cfg = diskCfg(d.id);
 
   var subTags = '<span class="mono">' + esc(d.path) + "</span>" +
     '<span class="tag tag-blue">' + esc(tran) + "</span>" +
     '<span class="tag">' + esc(kind) + "</span>";
   if (d.is_system) subTags += '<span class="tag tag-warn">系统盘</span>';
+  if (cfg.sleep_mode === "daily") subTags += '<span class="tag tag-blue">每天 ' + esc(cfg.sleep_daily_at) + " 休眠</span>";
+  if (cfg.sleep_mode === "idle") subTags += '<span class="tag tag-blue">空闲 ' + esc(cfg.sleep_idle_min) + " 分休眠</span>";
+  if (cfg.space_enabled) subTags += '<span class="tag tag-blue">空间清理 ' + esc(cfg.space_threshold_gb) + "G</span>";
 
   var serial = d.serial ? '<span class="mono">' + esc(d.serial) + "</span>" : "—";
+
+  var freeHtml = "";
+  if (d.free_bytes != null && d.mountpoints && d.mountpoints.length) {
+    freeHtml = '<div class="spec"><div class="k">可用空间</div><div class="v" title="' + esc(d.mountpoints[0]) + '">' +
+      formatBytes(d.free_bytes) + "</div></div>";
+  }
 
   var mountsHtml = "";
   if (d.mountpoints && d.mountpoints.length) {
@@ -416,6 +648,8 @@ function cardHtml(d, idx) {
     btn = '<button class="btn-sleep" onclick="sleepDisk(\'' + esc(d.id).replace(/'/g, "\\'") + '\')">' + ICON_MOON + "立即休眠</button>";
   }
 
+  var taskOn = cfg.sleep_mode !== "off" || cfg.space_enabled;
+
   return '<div class="card" style="animation-delay:' + ((idx || 0) * 70) + 'ms">' +
     '<div class="card-head">' +
       '<div class="disk-icon s-' + state + '">' + ICON_DISK + "</div>" +
@@ -427,12 +661,16 @@ function cardHtml(d, idx) {
     "</div>" +
     '<div class="specs">' +
       '<div class="spec"><div class="k">容量</div><div class="v">' + formatBytes(d.size_bytes) + "</div></div>" +
+      freeHtml +
       '<div class="spec"><div class="k">序列号</div><div class="v" title="' + esc(d.serial || "") + '">' + serial + "</div></div>" +
       mountsHtml +
       lastSleepHtml +
     "</div>" +
     detailHtml +
-    btn +
+    '<div class="card-actions">' +
+      btn +
+      '<button class="btn-task' + (taskOn ? " on" : "") + '" onclick="openTaskModal(\'' + esc(d.id).replace(/'/g, "\\'") + '\')">' + ICON_TASK + (taskOn ? "任务已设" : "定时任务") + "</button>" +
+    "</div>" +
   "</div>";
 }
 
@@ -474,11 +712,15 @@ function refresh() {
   if (REFRESHING) return;
   REFRESHING = true;
   document.getElementById("refreshBtn").classList.add("spinning");
-  fetch("/api/disks", { cache: "no-store" })
-    .then(function (r) { return r.json(); })
-    .then(function (data) {
+  Promise.all([
+    fetch("/api/disks", { cache: "no-store" }).then(function (r) { return r.json(); }),
+    fetch("/api/config", { cache: "no-store" }).then(function (r) { return r.json(); }).catch(function () { return null; })
+  ])
+    .then(function (rs) {
+      var data = rs[0];
       if (!data.ok) throw new Error(data.error || "加载失败");
       DISKS = data.disks || [];
+      if (rs[1] && rs[1].ok && rs[1].config) CONFIG = rs[1].config;
       hideBanner();
       render();
       setUpdated();
@@ -526,6 +768,176 @@ function sleepDisk(id) {
       delete BUSY[id];
       render();
       setUpdated();
+    });
+}
+
+/* ---------------- 定时任务弹窗 ---------------- */
+function openModal(id) {
+  document.getElementById(id).classList.add("show");
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove("show");
+}
+function maskClose(ev, id) {
+  if (ev.target === document.getElementById(id)) closeModal(id);
+}
+
+function toggleSec(switchId, bodyId) {
+  var on = document.getElementById(switchId).checked;
+  document.getElementById(bodyId).classList.toggle("off", !on);
+}
+
+function setSleepMode(mode) {
+  var isDaily = mode === "daily";
+  document.getElementById("tmModeDaily").classList.toggle("on", isDaily);
+  document.getElementById("tmModeIdle").classList.toggle("on", !isDaily);
+  document.getElementById("tmDailyRow").style.display = isDaily ? "" : "none";
+  document.getElementById("tmIdleRow").style.display = isDaily ? "none" : "";
+  var radios = document.getElementsByName("tmSleepMode");
+  for (var i = 0; i < radios.length; i++) radios[i].checked = (radios[i].value === mode);
+}
+
+function renderSpaceLast(last) {
+  var wrap = document.getElementById("tmSpaceLastWrap");
+  if (!last) {
+    wrap.innerHTML = "";
+    return;
+  }
+  var items = (last.deleted || []).map(function (x) {
+    return "<li>" + esc(x.name) + "（" + formatBytes(x.size) + "）</li>";
+  }).join("");
+  wrap.innerHTML = '<div class="last-result">' +
+    '<div class="lr-title ' + (last.ok ? "lr-ok" : "lr-bad") + '">' +
+      esc(last.time) + (last.manual ? " · 手动检查" : " · 自动检查") + "</div>" +
+    "<div>" + esc(last.message) + "</div>" +
+    (items ? "<ul>" + items + "</ul>" : "") +
+    "</div>";
+}
+
+function openTaskModal(id) {
+  var d = DISKS.find(function (x) { return x.id === id; });
+  if (!d) return;
+  TASK_DISK = id;
+  var cfg = diskCfg(id);
+
+  document.getElementById("tmSub").textContent = (d.model || d.path) + " · " + d.path;
+
+  var sleepOn = cfg.sleep_mode !== "off";
+  document.getElementById("tmSleepOn").checked = sleepOn;
+  document.getElementById("tmSleepBody").classList.toggle("off", !sleepOn);
+  setSleepMode(cfg.sleep_mode === "idle" ? "idle" : "daily");
+  document.getElementById("tmDailyAt").value = cfg.sleep_daily_at || "02:00";
+  document.getElementById("tmIdleMin").value = cfg.sleep_idle_min || 30;
+
+  document.getElementById("tmSpaceOn").checked = !!cfg.space_enabled;
+  document.getElementById("tmSpaceBody").classList.toggle("off", !cfg.space_enabled);
+  document.getElementById("tmThreshold").value = cfg.space_threshold_gb || 20;
+  document.getElementById("tmSpacePath").value = cfg.space_path || "";
+  document.getElementById("tmCheckTimeHint").textContent = CONFIG.space_check_time || "00:00";
+  renderSpaceLast(cfg.space_last);
+
+  openModal("taskModal");
+}
+
+function collectTaskForm() {
+  var sleepOn = document.getElementById("tmSleepOn").checked;
+  var mode = "off";
+  if (sleepOn) {
+    var radios = document.getElementsByName("tmSleepMode");
+    for (var i = 0; i < radios.length; i++) if (radios[i].checked) mode = radios[i].value;
+  }
+  return {
+    sleep_mode: mode,
+    sleep_idle_min: parseInt(document.getElementById("tmIdleMin").value, 10) || 30,
+    sleep_daily_at: document.getElementById("tmDailyAt").value || "02:00",
+    space_enabled: document.getElementById("tmSpaceOn").checked,
+    space_threshold_gb: parseFloat(document.getElementById("tmThreshold").value) || 20,
+    space_path: document.getElementById("tmSpacePath").value.trim()
+  };
+}
+
+function saveTaskModal(silent) {
+  if (!TASK_DISK) return Promise.resolve(false);
+  var body = { disks: {} };
+  body.disks[TASK_DISK] = collectTaskForm();
+  return fetch("/api/config", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!data.ok) {
+        toast(data.message || "保存失败", "error");
+        return false;
+      }
+      if (data.config) CONFIG = data.config;
+      if (!silent) {
+        toast("任务设置已保存", "success");
+        closeModal("taskModal");
+      }
+      render();
+      return true;
+    })
+    .catch(function (e) {
+      toast("保存失败：" + e.message, "error");
+      return false;
+    });
+}
+
+function runSpaceCheckNow() {
+  if (!TASK_DISK) return;
+  var btn = document.getElementById("tmCheckBtn");
+  btn.disabled = true;
+  saveTaskModal(true)
+    .then(function (ok) {
+      if (!ok) return null;
+      return fetch("/api/space_check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: TASK_DISK })
+      }).then(function (r) { return r.json(); });
+    })
+    .then(function (data) {
+      if (!data) return;
+      toast(data.message || (data.ok ? "检查完成" : "检查失败"), data.ok ? "success" : "error");
+      var cfg = diskCfg(TASK_DISK);
+      if (cfg && data.ok !== undefined) renderSpaceLast(cfg.space_last);
+    })
+    .catch(function (e) {
+      toast("请求失败：" + e.message, "error");
+    })
+    .finally(function () {
+      btn.disabled = false;
+      refresh();
+    });
+}
+
+/* ---------------- 全局定时设置弹窗 ---------------- */
+function openGlobalModal() {
+  document.getElementById("gmCheckTime").value = CONFIG.space_check_time || "00:00";
+  openModal("globalModal");
+}
+
+function saveGlobalModal() {
+  fetch("/api/config", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ space_check_time: document.getElementById("gmCheckTime").value })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!data.ok) {
+        toast(data.message || "保存失败", "error");
+        return;
+      }
+      if (data.config) CONFIG = data.config;
+      document.getElementById("tmCheckTimeHint").textContent = CONFIG.space_check_time || "00:00";
+      toast("定时设置已保存，将于每天 " + (CONFIG.space_check_time || "00:00") + " 检查空间", "success");
+      closeModal("globalModal");
+    })
+    .catch(function (e) {
+      toast("保存失败：" + e.message, "error");
     });
 }
 
