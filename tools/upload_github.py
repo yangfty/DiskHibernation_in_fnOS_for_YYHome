@@ -32,6 +32,7 @@ API = "https://api.github.com"
 
 # 需要上传的文件/目录（相对项目根目录）
 INCLUDE = [
+    "README.md",
     "YYHomeFNAsst",
     "tools/test_mock.py",
     "tools/upload_github.py",
