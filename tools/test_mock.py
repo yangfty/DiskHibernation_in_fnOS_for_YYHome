@@ -8,14 +8,21 @@ YYHomeFNAsst 本地冒烟测试（在开发机上运行，无需真实磁盘）
 
 import json
 import os
+import shutil
 import sys
+import tempfile
 import threading
+import time
 import urllib.request
 import urllib.error
 
 SERVICE_DIR = os.path.normpath(os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "YYHomeFNAsst", "app", "service"))
 sys.path.insert(0, SERVICE_DIR)
+
+# 配置写入独立的临时目录，避免污染本机 /tmp
+TEST_VAR = tempfile.mkdtemp(prefix="fnasst_cfg_")
+os.environ["YYHOMEFNASST_VAR"] = TEST_VAR
 
 import main  # noqa: E402
 
@@ -225,11 +232,12 @@ def test_http():
         with urllib.request.urlopen("http://127.0.0.1:18327/", timeout=5) as resp:
             html = resp.read().decode()
         check("GET / 返回前端页面", "YYHomeFNAsst" in html and "立即休眠" in html)
-        check("前端页面包含版本号显示", "V0.0.2" in html and "verBadge" in html)
+        check("前端页面包含版本号显示", "V0.0.3" in html and "verBadge" in html)
+        check("前端页面包含定时任务入口", "定时任务" in html and "空间清理" in html and "tmSpacePath" in html)
 
         # 版本接口
         status, data = http("GET", "/api/about")
-        check("GET /api/about 返回版本 0.0.2", status == 200 and data.get("version") == "0.0.2")
+        check("GET /api/about 返回版本 0.0.3", status == 200 and data.get("version") == "0.0.3")
 
         # 磁盘列表
         status, data = http("GET", "/api/disks")
@@ -253,15 +261,189 @@ def test_http():
         check("缺少 id 返回 400", status == 400 and "缺少" in data["message"])
         status, data = http("GET", "/api/nonexist")
         check("未知接口返回 404", status == 404)
+
+        # 配置接口
+        status, data = http("GET", "/api/config")
+        check("GET /api/config 返回配置", status == 200 and data["ok"]
+              and "space_check_time" in data["config"] and "disks" in data["config"])
+        status, data = http("POST", "/api/config",
+                            {"disks": {"serial:HTTPTEST": {"sleep_mode": "daily", "sleep_daily_at": "03:30"}}})
+        check("POST /api/config 保存硬盘任务", status == 200 and data["ok"]
+              and data["config"]["disks"]["serial:HTTPTEST"]["sleep_daily_at"] == "03:30", str(data))
+        status, data = http("POST", "/api/config", {"disks": {"serial:HTTPTEST": {"sleep_mode": "bad"}}})
+        check("POST /api/config 非法模式返回 400", status == 400 and not data["ok"])
+        status, data = http("POST", "/api/space_check", {})
+        check("POST /api/space_check 缺少 id 返回 400", status == 400 and "缺少" in data["message"])
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_config():
+    print("\n== 任务配置 ==")
+    ok, msg = main.update_config({"space_check_time": "00:30"})
+    check("全局空间检查时间可设置", ok and main.load_config()["space_check_time"] == "00:30", msg)
+
+    ok, msg = main.update_config({"space_check_time": "25:00"})
+    check("非法时间被拒绝", not ok, msg)
+    ok, msg = main.update_config({"disks": {"x": {"sleep_mode": "bad"}}})
+    check("非法休眠模式被拒绝", not ok)
+    ok, msg = main.update_config({"disks": {"x": {"space_path": "relative/path"}}})
+    check("相对路径监控目录被拒绝", not ok)
+    ok, msg = main.update_config({"disks": {"x": {"sleep_idle_min": 0}}})
+    check("空闲分钟数越界被拒绝", not ok)
+
+    ok, msg = main.update_config({"disks": {"serial:WD-WX11A0B77777": {
+        "sleep_mode": "daily", "sleep_daily_at": "01:05"}}})
+    cfg = main.load_config()["disks"]["serial:WD-WX11A0B77777"]
+    check("硬盘定时休眠配置可保存", ok and cfg["sleep_mode"] == "daily"
+          and cfg["sleep_daily_at"] == "01:05", msg)
+    check("未提交字段回退默认值", cfg["sleep_idle_min"] == 30
+          and cfg["space_threshold_gb"] == 20 and cfg["space_enabled"] is False)
+
+    # 配置持久化：清空内存缓存后重新加载
+    main._CONFIG = None
+    cfg2 = main.load_config()["disks"]["serial:WD-WX11A0B77777"]
+    check("配置持久化到磁盘并可重新加载",
+          cfg2["sleep_mode"] == "daily" and main.load_config()["space_check_time"] == "00:30")
+
+
+def _make_mock_camera_dir():
+    """构造模拟的小米摄像头目录：两个摄像头 SN，各含日期文件夹"""
+    root = tempfile.mkdtemp(prefix="fnasst_space_")
+    for cam, dates in (("94F8275876BE", ["2026062107", "2026062108", "2026062109", "notadate"]),
+                       ("AABBCCDDEEFF", ["2026062105", "2026062106"])):
+        for d in dates:
+            p = os.path.join(root, cam, d)
+            os.makedirs(p)
+            with open(os.path.join(p, "video.mp4"), "wb") as f:
+                f.write(b"x" * 4096)
+    return root
+
+
+def test_space_check(by_name):
+    print("\n== 空间清理 ==")
+    GB = 1024 ** 3
+    root = _make_mock_camera_dir()
+    disk_id = by_name["sdf"]["id"]
+
+    # 模拟剩余空间：初始 18G（低于阈值 20G），每删除一个文件夹释放 12G
+    fake_free = {"val": 18 * GB}
+    orig_free = main._fs_free_bytes
+    orig_rmtree = main.shutil.rmtree
+
+    def fake_rmtree(p, *a, **kw):
+        orig_rmtree(p, *a, **kw)
+        fake_free["val"] += 12 * GB
+
+    main._fs_free_bytes = lambda p: fake_free["val"]
+    main.shutil.rmtree = fake_rmtree
+    try:
+        ok, _ = main.update_config({"disks": {disk_id: {
+            "space_enabled": True, "space_threshold_gb": 20, "space_path": root}}})
+        check("空间清理配置可保存", ok)
+
+        r = main.run_space_check(disk_id, manual=True)
+        check("空间不足时删除最早日期文件夹", r["ok"] and len(r["deleted"]) == 1, str(r))
+        check("删除的是全局最早的文件夹（第二台摄像头 2026062105）",
+              r["deleted"][0]["name"].replace("\\", "/") == "AABBCCDDEEFF/2026062105", str(r))
+        check("非日期命名的文件夹不被删除",
+              os.path.isdir(os.path.join(root, "94F8275876BE", "notadate")))
+        check("较新的日期文件夹被保留",
+              os.path.isdir(os.path.join(root, "94F8275876BE", "2026062109")))
+        check("删除结果写入配置", main.load_config()["disks"][disk_id]["space_last"]["ok"] is True)
+
+        # 剩余空间充足时不应删除任何文件夹
+        fake_free["val"] = 100 * GB
+        r = main.run_space_check(disk_id, manual=True)
+        check("空间充足时不删除", r["ok"] and len(r["deleted"]) == 0 and "无需清理" in r["message"], str(r))
+
+        # 全部删完仍不足时给出明确提示
+        fake_free["val"] = 1 * GB
+        main._fs_free_bytes = lambda p: 1 * GB  # 恒为 1G，删完也不够
+        r = main.run_space_check(disk_id, manual=True)
+        check("删完仍不足时提示明确",
+              r["ok"] and "仍低于阈值" in r["message"], str(r))
+        check("全部日期文件夹已被删除",
+              not os.path.exists(os.path.join(root, "94F8275876BE", "2026062107")))
+
+        # 未设置监控目录时的提示
+        main.update_config({"disks": {by_name["sda"]["id"]: {"space_enabled": True}}})
+        r = main.run_space_check(by_name["sda"]["id"])
+        check("未设置监控目录时给出提示", not r["ok"] and "尚未设置监控目录" in r["message"], str(r))
+    finally:
+        main._fs_free_bytes = orig_free
+        main.shutil.rmtree = orig_rmtree
+        shutil.rmtree(root, ignore_errors=True)
+        main.update_config({"disks": {disk_id: {"space_enabled": False, "space_path": ""}},
+                            "space_check_time": "00:00"})
+
+
+def test_scheduler(by_name):
+    print("\n== 后台调度 ==")
+    today = time.strftime("%Y-%m-%d")
+    disk_id = by_name["sdd"]["id"]  # sdd 与 sdb 序列号相同，用其独立 id
+
+    # ---- 每天定时休眠 ----
+    MOCK_STATE["/dev/sdd"] = "active"
+    main.update_config({"disks": {disk_id: {"sleep_mode": "daily", "sleep_daily_at": "00:00"}}})
+    main._scheduler_tick()
+    check("到达设定时间后自动休眠", MOCK_STATE["/dev/sdd"] == "standby")
+    check("执行日期被记录（避免重复执行）",
+          main.load_config()["disks"][disk_id]["sleep_daily_last"] == today)
+
+    MOCK_STATE["/dev/sdd"] = "active"
+    main._scheduler_tick()
+    check("同一天不会重复执行", MOCK_STATE["/dev/sdd"] == "active")
+
+    # ---- 空闲后自动休眠 ----
+    main.update_config({"disks": {disk_id: {"sleep_mode": "idle", "sleep_idle_min": 30}}})
+    main._AWAKE_SINCE.clear()
+    main._scheduler_tick()
+    check("空闲计时的首个周期不发送指令", MOCK_STATE["/dev/sdd"] == "active")
+
+    main._AWAKE_SINCE[disk_id] = time.time() - 31 * 60
+    main._scheduler_tick()
+    check("持续非休眠超过设定时长后自动休眠", MOCK_STATE["/dev/sdd"] == "standby")
+
+    main._AWAKE_SINCE[disk_id] = time.time() - 31 * 60
+    main._scheduler_tick()
+    check("已休眠的盘重置计时且不重复发指令", MOCK_STATE["/dev/sdd"] == "standby"
+          and disk_id not in main._AWAKE_SINCE)
+
+    # ---- 空间清理调度（检查时间 00:00，必然已过）----
+    GB = 1024 ** 3
+    root = _make_mock_camera_dir()
+    fake_free = {"val": 18 * GB}
+    orig_free = main._fs_free_bytes
+    main._fs_free_bytes = lambda p: fake_free["val"]
+    try:
+        main.update_config({"disks": {disk_id: {"sleep_mode": "off",
+                                                "space_enabled": True,
+                                                "space_threshold_gb": 20,
+                                                "space_path": root}}})
+        main._scheduler_tick()
+        dcfg = main.load_config()["disks"][disk_id]
+        check("到达全局检查时间后自动执行空间清理",
+              dcfg.get("space_last_date") == today and dcfg.get("space_last", {}).get("ok") is True)
+        main._scheduler_tick()
+        check("同一天不会重复执行空间清理",
+              main.load_config()["disks"][disk_id]["space_last_date"] == today)
+    finally:
+        main._fs_free_bytes = orig_free
+        shutil.rmtree(root, ignore_errors=True)
+        main.update_config({"disks": {disk_id: {"sleep_mode": "off", "space_enabled": False,
+                                                "space_path": ""}}})
 
 
 if __name__ == "__main__":
     print("YYHomeFNAsst 冒烟测试（模拟环境）")
     by_name = test_list_and_state()
     test_sleep(by_name)
+    test_config()
+    test_space_check(by_name)
+    test_scheduler(by_name)
     test_http()
+    shutil.rmtree(TEST_VAR, ignore_errors=True)
     print("\n结果：%d 通过，%d 失败" % (PASS, FAIL))
     sys.exit(1 if FAIL else 0)
