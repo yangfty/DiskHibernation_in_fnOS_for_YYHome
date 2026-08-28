@@ -232,12 +232,13 @@ def test_http():
         with urllib.request.urlopen("http://127.0.0.1:18327/", timeout=5) as resp:
             html = resp.read().decode()
         check("GET / 返回前端页面", "YYHomeFNAsst" in html and "立即休眠" in html)
-        check("前端页面包含版本号显示", "V0.0.3" in html and "verBadge" in html)
+        check("前端页面包含版本号显示", "V0.0.4" in html and "verBadge" in html)
         check("前端页面包含定时任务入口", "定时任务" in html and "空间清理" in html and "tmSpacePath" in html)
+        check("前端页面包含每盘独立的检查时间设置", "tmCheckAt" in html and "globalModal" not in html)
 
         # 版本接口
         status, data = http("GET", "/api/about")
-        check("GET /api/about 返回版本 0.0.3", status == 200 and data.get("version") == "0.0.3")
+        check("GET /api/about 返回版本 0.0.4", status == 200 and data.get("version") == "0.0.4")
 
         # 磁盘列表
         status, data = http("GET", "/api/disks")
@@ -265,11 +266,13 @@ def test_http():
         # 配置接口
         status, data = http("GET", "/api/config")
         check("GET /api/config 返回配置", status == 200 and data["ok"]
-              and "space_check_time" in data["config"] and "disks" in data["config"])
+              and "disks" in data["config"])
         status, data = http("POST", "/api/config",
-                            {"disks": {"serial:HTTPTEST": {"sleep_mode": "daily", "sleep_daily_at": "03:30"}}})
+                            {"disks": {"serial:HTTPTEST": {"sleep_mode": "daily", "sleep_daily_at": "03:30",
+                                                           "space_check_time": "01:30"}}})
         check("POST /api/config 保存硬盘任务", status == 200 and data["ok"]
-              and data["config"]["disks"]["serial:HTTPTEST"]["sleep_daily_at"] == "03:30", str(data))
+              and data["config"]["disks"]["serial:HTTPTEST"]["sleep_daily_at"] == "03:30"
+              and data["config"]["disks"]["serial:HTTPTEST"]["space_check_time"] == "01:30", str(data))
         status, data = http("POST", "/api/config", {"disks": {"serial:HTTPTEST": {"sleep_mode": "bad"}}})
         check("POST /api/config 非法模式返回 400", status == 400 and not data["ok"])
         status, data = http("POST", "/api/space_check", {})
@@ -281,10 +284,11 @@ def test_http():
 
 def test_config():
     print("\n== 任务配置 ==")
-    ok, msg = main.update_config({"space_check_time": "00:30"})
-    check("全局空间检查时间可设置", ok and main.load_config()["space_check_time"] == "00:30", msg)
+    ok, msg = main.update_config({"disks": {"serial:TIME": {"space_check_time": "00:30"}}})
+    check("每盘独立的空间检查时间可设置",
+          ok and main.load_config()["disks"]["serial:TIME"]["space_check_time"] == "00:30", msg)
 
-    ok, msg = main.update_config({"space_check_time": "25:00"})
+    ok, msg = main.update_config({"disks": {"x": {"space_check_time": "25:00"}}})
     check("非法时间被拒绝", not ok, msg)
     ok, msg = main.update_config({"disks": {"x": {"sleep_mode": "bad"}}})
     check("非法休眠模式被拒绝", not ok)
@@ -299,13 +303,29 @@ def test_config():
     check("硬盘定时休眠配置可保存", ok and cfg["sleep_mode"] == "daily"
           and cfg["sleep_daily_at"] == "01:05", msg)
     check("未提交字段回退默认值", cfg["sleep_idle_min"] == 30
-          and cfg["space_threshold_gb"] == 20 and cfg["space_enabled"] is False)
+          and cfg["space_threshold_gb"] == 20 and cfg["space_enabled"] is False
+          and cfg["space_check_time"] == "00:00")
 
     # 配置持久化：清空内存缓存后重新加载
     main._CONFIG = None
     cfg2 = main.load_config()["disks"]["serial:WD-WX11A0B77777"]
     check("配置持久化到磁盘并可重新加载",
-          cfg2["sleep_mode"] == "daily" and main.load_config()["space_check_time"] == "00:30")
+          cfg2["sleep_mode"] == "daily"
+          and main.load_config()["disks"]["serial:TIME"]["space_check_time"] == "00:30")
+
+    # 旧版配置迁移：全局 space_check_time 下放到没有单独设置检查时间的硬盘
+    legacy = {"version": 1, "space_check_time": "02:30", "disks": {
+        "serial:MIG-A": {"sleep_mode": "off"},                      # 应继承全局 02:30
+        "serial:MIG-B": {"sleep_mode": "off", "space_check_time": "05:00"},  # 保留自己的 05:00
+    }}
+    with open(main.CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(legacy, f, ensure_ascii=False)
+    main._CONFIG = None
+    migrated = main.load_config()["disks"]
+    check("旧全局检查时间迁移到未单独设置的硬盘", migrated["serial:MIG-A"]["space_check_time"] == "02:30",
+          str(migrated.get("serial:MIG-A")))
+    check("硬盘单独设置的检查时间在迁移后保留", migrated["serial:MIG-B"]["space_check_time"] == "05:00")
+    check("迁移后顶层不再有全局检查时间字段", "space_check_time" not in main.load_config())
 
 
 def _make_mock_camera_dir():
@@ -375,8 +395,7 @@ def test_space_check(by_name):
         main._fs_free_bytes = orig_free
         main.shutil.rmtree = orig_rmtree
         shutil.rmtree(root, ignore_errors=True)
-        main.update_config({"disks": {disk_id: {"space_enabled": False, "space_path": ""}},
-                            "space_check_time": "00:00"})
+        main.update_config({"disks": {disk_id: {"space_enabled": False, "space_path": ""}}})
 
 
 def test_scheduler(by_name):
@@ -411,20 +430,28 @@ def test_scheduler(by_name):
     check("已休眠的盘重置计时且不重复发指令", MOCK_STATE["/dev/sdd"] == "standby"
           and disk_id not in main._AWAKE_SINCE)
 
-    # ---- 空间清理调度（检查时间 00:00，必然已过）----
+    # ---- 空间清理调度（每盘独立检查时间）----
     GB = 1024 ** 3
     root = _make_mock_camera_dir()
     fake_free = {"val": 18 * GB}
     orig_free = main._fs_free_bytes
     main._fs_free_bytes = lambda p: fake_free["val"]
     try:
+        # 检查时间设为 23:59（必然未到），不应执行
         main.update_config({"disks": {disk_id: {"sleep_mode": "off",
                                                 "space_enabled": True,
                                                 "space_threshold_gb": 20,
-                                                "space_path": root}}})
+                                                "space_path": root,
+                                                "space_check_time": "23:59"}}})
+        main._scheduler_tick()
+        check("未到该硬盘检查时间时不执行空间清理",
+              main.load_config()["disks"][disk_id].get("space_last_date") != today)
+
+        # 改为 00:00（必然已过），应执行一次
+        main.update_config({"disks": {disk_id: {"space_check_time": "00:00"}}})
         main._scheduler_tick()
         dcfg = main.load_config()["disks"][disk_id]
-        check("到达全局检查时间后自动执行空间清理",
+        check("到达该硬盘检查时间后自动执行空间清理",
               dcfg.get("space_last_date") == today and dcfg.get("space_last", {}).get("ok") is True)
         main._scheduler_tick()
         check("同一天不会重复执行空间清理",
