@@ -28,6 +28,15 @@
 - 只删除纯数字日期命名的文件夹，其他文件和目录一律不动
 - 清理结果（删除明细、释放空间）持久化保存，随时可在界面查看
 
+## 下载
+
+| 版本 | 下载 | 说明 |
+|---|---|---|
+| V0.0.3（最新） | [YYHomeFNAsst-0.0.3.fpk](https://github.com/yangfty/YYHomeFNAsst/releases/download/v0.0.3/YYHomeFNAsst-0.0.3.fpk) | 定时休眠 + 监控空间清理 |
+| V0.0.2 | [YYHomeFNAsst-0.0.2.fpk](https://github.com/yangfty/YYHomeFNAsst/releases/download/v0.0.2/YYHomeFNAsst-0.0.2.fpk) | 基础版：状态查询 + 一键休眠 |
+
+更多历史版本请前往 [Releases 页面](https://github.com/yangfty/YYHomeFNAsst/releases)。
+
 ## 安装说明
 
 ### 环境要求
@@ -35,9 +44,9 @@
 - 硬盘需支持 ATA 休眠指令（绝大多数 SATA 机械硬盘支持；部分 USB 移动硬盘的桥接芯片不支持状态查询或休眠，属正常现象）
 
 ### 安装步骤
-1. 下载本仓库根目录的 [com.yyhome.fnasst.fpk](https://github.com/yangfty/YYHomeFNAsst/raw/main/com.yyhome.fnasst.fpk)
+1. 从上方下载最新版 `YYHomeFNAsst-x.x.x.fpk`
 2. 打开 fnOS **应用中心** → 右上角 **手动安装**（或"安装本地应用"）
-3. 选择下载的 `com.yyhome.fnasst.fpk` 文件，确认安装
+3. 选择下载的 fpk 文件，确认安装
 4. 安装完成后，桌面会出现 **YYHomeFNAsst** 图标；或直接访问 `http://NAS的IP:8327/`
 
 ### 升级 / 卸载
@@ -98,6 +107,9 @@ python tools/test_mock.py
 
 # 打包 fpk（需 fnOS 官方 fnpack 工具）
 tools/fnpack.exe build -d YYHomeFNAsst
+
+# 发布新版本（打 tag + 创建 Release + 上传 fpk 附件）
+python tools/release_github.py --token ghp_xxx --repo YYHomeFNAsst --version 0.0.4 --fpk com.yyhome.fnasst.fpk
 ```
 
 ## License
