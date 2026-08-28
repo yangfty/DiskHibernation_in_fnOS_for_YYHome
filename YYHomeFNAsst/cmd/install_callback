@@ -1,0 +1,7 @@
+#!/bin/bash
+# YYHomeFNAsst 安装完成后的初始化
+
+if [ -n "${TRIM_PKGVAR}" ]; then
+    mkdir -p "${TRIM_PKGVAR}" 2>/dev/null
+fi
+exit 0
