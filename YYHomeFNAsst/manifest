@@ -1,7 +1,7 @@
 appname=com.yyhome.fnasst
 version=0.0.3
 display_name=YYHomeFNAsst
-desc=硬盘休眠管理工具：自动识别所有物理硬盘（SATA/USB），查看型号、容量、序列号、连接方式与电源状态，一键让指定硬盘立即休眠（hdparm -y）。不会修改 fnOS 自带的自动休眠设置。
+desc=飞牛 fnOS 硬盘休眠与监控空间管理工具：自动识别所有物理硬盘（SATA/USB），实时查看电源状态与可用空间，一键立即休眠；每块硬盘可独立设置定时休眠（每天定时/空闲自动）；支持监控录像空间自动清理，剩余空间不足时按日期从早到晚自动删除旧录像文件夹（兼容小米摄像头目录格式）。零依赖、不修改 fnOS 系统自带的休眠设置。
 source=thirdparty
 platform=all
 maintainer=YYHome
