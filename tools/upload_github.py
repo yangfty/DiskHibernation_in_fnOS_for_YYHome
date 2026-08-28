@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-DiskHibeY - GitHub 上传工具（纯 GitHub REST API 实现，无需安装 git）
+YYHomeFNAsst - GitHub 上传工具（纯 GitHub REST API 实现，无需安装 git）
 
 用法：
   # 上传到已有仓库
-  python tools/upload_github.py --token ghp_xxx --repo DiskHibernation_in_fnOS_for_YYHome
+  python tools/upload_github.py --token ghp_xxx --repo YYHomeFNAsst
 
   # 新建仓库并上传（公开）
-  python tools/upload_github.py --token ghp_xxx --repo DiskHibernation_in_fnOS_for_YYHome --create
+  python tools/upload_github.py --token ghp_xxx --repo YYHomeFNAsst --create
 
   # 新建私有仓库
   python tools/upload_github.py --token ghp_xxx --repo xxx --create --private
@@ -32,10 +32,10 @@ API = "https://api.github.com"
 
 # 需要上传的文件/目录（相对项目根目录）
 INCLUDE = [
-    "DiskHibeY",
+    "YYHomeFNAsst",
     "tools/test_mock.py",
     "tools/upload_github.py",
-    "com.yyhome.diskhibey.fpk",
+    "com.yyhome.fnasst.fpk",
 ]
 # 排除项：目录名 / 文件扩展名
 EXCLUDE_NAMES = {".git", "__pycache__", ".DS_Store", "Thumbs.db"}
@@ -50,7 +50,7 @@ def api(token, method, url, body=None, retries=3):
         req = urllib.request.Request(url, data=data, method=method)
         req.add_header("Authorization", "Bearer " + token)
         req.add_header("Accept", "application/vnd.github+json")
-        req.add_header("User-Agent", "DiskHibeY-uploader")
+        req.add_header("User-Agent", "YYHomeFNAsst-uploader")
         req.add_header("X-GitHub-Api-Version", "2022-11-28")
         if data:
             req.add_header("Content-Type", "application/json")
@@ -122,7 +122,7 @@ def main():
             print("仓库不存在，正在创建：%s/%s ..." % (owner, args.repo))
             code2, created = api(args.token, "POST", API + "/user/repos", {
                 "name": args.repo,
-                "description": "DiskHibeY - DiskHibernation in fnOS for YYHome：飞牛 fnOS 硬盘休眠管理应用（FPK）",
+                "description": "YYHomeFNAsst - DiskHibernation in fnOS for YYHome：飞牛 fnOS 硬盘休眠管理应用（FPK）",
                 "private": bool(args.private),
                 "auto_init": False,
             })
