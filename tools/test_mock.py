@@ -232,14 +232,21 @@ def test_http():
         with urllib.request.urlopen("http://127.0.0.1:18327/", timeout=5) as resp:
             html = resp.read().decode()
         check("GET / 返回前端页面", "YYHomeFNAsst" in html and "立即休眠" in html)
-        check("前端页面包含版本号显示", "V0.1.0" in html and "verBadge" in html)
+        check("前端页面包含版本号显示", "V0.1.1" in html and "verBadge" in html)
         check("前端页面包含定时任务入口", "定时任务" in html and "空间清理" in html and "tmSpacePath" in html)
         check("前端页面包含每盘独立的检查时间设置", "tmCheckAt" in html and "globalModal" not in html)
         check("前端页面包含弹窗背景滚动锁定", "modal-open" in html and "overscroll-behavior" in html)
+        check("页头图标引用应用图标文件", 'src="/icon.png"' in html)
+
+        # 图标文件接口
+        with urllib.request.urlopen("http://127.0.0.1:18327/icon.png", timeout=5) as resp:
+            icon = resp.read()
+            ctype = resp.headers.get("Content-Type", "")
+        check("GET /icon.png 返回 PNG 图标", len(icon) > 1000 and ctype == "image/png")
 
         # 版本接口
         status, data = http("GET", "/api/about")
-        check("GET /api/about 返回版本 0.1.0", status == 200 and data.get("version") == "0.1.0")
+        check("GET /api/about 返回版本 0.1.1", status == 200 and data.get("version") == "0.1.1")
 
         # 磁盘列表
         status, data = http("GET", "/api/disks")
