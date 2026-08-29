@@ -2,7 +2,7 @@
 
 飞牛 fnOS 硬盘休眠与监控空间管理工具
 
-[![Version](https://img.shields.io/badge/version-0.0.5-blue)](https://github.com/yangfty/YYHomeFNAsst)
+[![Version](https://img.shields.io/badge/version-0.1.0-blue)](https://github.com/yangfty/YYHomeFNAsst)
 [![Platform](https://img.shields.io/badge/platform-fnOS%20%3E%3D%200.9.27-green)](https://www.fnnas.com/)
 [![License](https://img.shields.io/badge/license-MIT-orange)](#)
 
@@ -32,7 +32,8 @@
 
 | 版本 | 下载 | 说明 |
 |---|---|---|
-| V0.0.5（最新） | [YYHomeFNAsst-0.0.5.fpk](https://github.com/yangfty/YYHomeFNAsst/releases/download/v0.0.5/YYHomeFNAsst-0.0.5.fpk) | 全新应用图标 + 界面配色统一 |
+| V0.1.0（最新） | [YYHomeFNAsst-0.1.0.fpk](https://github.com/yangfty/YYHomeFNAsst/releases/download/v0.1.0/YYHomeFNAsst-0.1.0.fpk) | 修复弹窗滚动穿透问题 |
+| V0.0.5 | [YYHomeFNAsst-0.0.5.fpk](https://github.com/yangfty/YYHomeFNAsst/releases/download/v0.0.5/YYHomeFNAsst-0.0.5.fpk) | 全新应用图标 + 界面配色统一 |
 | V0.0.4 | [YYHomeFNAsst-0.0.4.fpk](https://github.com/yangfty/YYHomeFNAsst/releases/download/v0.0.4/YYHomeFNAsst-0.0.4.fpk) | 每盘独立检查时间 + UI 优化 |
 | V0.0.3 | [YYHomeFNAsst-0.0.3.fpk](https://github.com/yangfty/YYHomeFNAsst/releases/download/v0.0.3/YYHomeFNAsst-0.0.3.fpk) | 定时休眠 + 监控空间清理 |
 | V0.0.2 | [YYHomeFNAsst-0.0.2.fpk](https://github.com/yangfty/YYHomeFNAsst/releases/download/v0.0.2/YYHomeFNAsst-0.0.2.fpk) | 基础版：状态查询 + 一键休眠 |
@@ -87,6 +88,9 @@
 - **空间清理会永久删除监控目录下的日期文件夹**，请确认监控目录路径填写正确后再开启
 
 ## 更新日志
+
+### V0.1.0
+- 修复体验问题：弹窗（定时任务）打开时锁定背景页面滚动，滚轮不再穿透滚动后面的硬盘卡片列表，弹窗内容自身仍可正常滚动
 
 ### V0.0.5
 - 采用全新设计的应用图标：蓝底渐变 + 白色硬盘图案，填满整个图标空间，圆角外透明无白边
