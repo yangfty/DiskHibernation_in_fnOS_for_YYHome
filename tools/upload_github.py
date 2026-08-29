@@ -19,6 +19,7 @@ Token 也可通过环境变量 GITHUB_TOKEN 提供（--token 优先）。
 
 import argparse
 import base64
+import fnmatch
 import json
 import os
 import sys
@@ -37,8 +38,9 @@ INCLUDE = [
     "tools/test_mock.py",
     "tools/upload_github.py",
     "tools/release_github.py",
-    "com.yyhome.fnasst.fpk",
 ]
+# 本地安装包命名规则：根目录下唯一的 com.yyhome.fnasst*.fpk（文件名含版本号）
+FPK_GLOB = "com.yyhome.fnasst*.fpk"
 # 排除项：目录名 / 文件扩展名
 EXCLUDE_NAMES = {".git", "__pycache__", ".DS_Store", "Thumbs.db"}
 EXCLUDE_EXTS = {".pyc", ".exe"}
@@ -90,7 +92,34 @@ def collect_files():
                         continue
                     rel = os.path.relpath(os.path.join(dirpath, fn), ROOT)
                     files.append(rel.replace(os.sep, "/"))
+    # 根目录下的最新安装包（文件名带版本号，如 com.yyhome.fnasst-0.0.5.fpk）
+    import glob
+    for p in sorted(glob.glob(os.path.join(ROOT, FPK_GLOB))):
+        files.append(os.path.basename(p))
     return sorted(set(files))
+
+
+def cleanup_stale_fpks(token, repo_url, local_files):
+    """删除仓库根目录中过期的 fpk（本地不存在的 com.yyhome.fnasst*.fpk），返回删除数"""
+    code, entries = api(token, "GET", repo_url + "/contents/")
+    if code != 200 or not isinstance(entries, list):
+        return 0
+    removed = 0
+    local_names = {f.split("/")[-1] for f in local_files}
+    for e in entries:
+        name = e.get("name", "")
+        if (e.get("type") == "file" and fnmatch.fnmatch(name, FPK_GLOB)
+                and name not in local_names):
+            code2, _ = api(token, "DELETE", repo_url + "/contents/" + urllib.parse.quote(name), {
+                "message": "删除过期安装包 " + name,
+                "sha": e.get("sha"),
+            })
+            if code2 == 200:
+                print("  [清理] 仓库中过期的 %s 已删除（历史版本见 Releases）" % name)
+                removed += 1
+            else:
+                print("  [警告] 删除过期 %s 失败（HTTP %s）" % (name, code2))
+    return removed
 
 
 def main():
@@ -140,6 +169,11 @@ def main():
         return 1
 
     files = collect_files()
+    fpks = [f for f in files if fnmatch.fnmatch(f.split("/")[-1], FPK_GLOB)]
+    if not fpks:
+        print("警告：根目录下未找到 %s（新版本尚未打包？）" % FPK_GLOB)
+    elif len(fpks) > 1:
+        print("警告：根目录下有 %d 个安装包，请只保留最新版本：%s" % (len(fpks), ", ".join(fpks)))
     print("待上传文件 %d 个" % len(files))
 
     ok = fail = skip = 0
@@ -170,6 +204,10 @@ def main():
             msg = result.get("message") if isinstance(result, dict) else str(result)
             print("  [失败] %s（HTTP %s）：%s" % (f, code, msg))
             fail += 1
+
+    # 清理仓库根目录中过期的旧安装包（历史版本由 Releases 管理）
+    if ok + skip > 0 and not fail:
+        cleanup_stale_fpks(args.token, repo_url, files)
 
     print("\n结果：成功 %d，跳过 %d，失败 %d" % (ok, skip, fail))
     if fail == 0:
