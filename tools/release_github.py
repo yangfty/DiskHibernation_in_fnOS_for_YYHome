@@ -11,7 +11,7 @@ YYHomeFNAsst - GitHub Release 发版工具（纯 GitHub REST API 实现）
 
   # 附带多个文件（如源码快照）
   python tools/release_github.py --token ghp_xxx --repo YYHomeFNAsst --version 0.0.3 \
-      --fpk dist/YYHomeFNAsst-0.0.3.fpk --extra dist/other-file.txt
+      --fpk com.yyhome.fnasst-0.0.5.fpk --extra 其他附件.txt
 
 Token 也可通过环境变量 GITHUB_TOKEN 提供（--token 优先）。
 """
