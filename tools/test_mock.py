@@ -232,13 +232,14 @@ def test_http():
         with urllib.request.urlopen("http://127.0.0.1:18327/", timeout=5) as resp:
             html = resp.read().decode()
         check("GET / 返回前端页面", "YYHomeFNAsst" in html and "立即休眠" in html)
-        check("前端页面包含版本号显示", "V0.0.5" in html and "verBadge" in html)
+        check("前端页面包含版本号显示", "V0.1.0" in html and "verBadge" in html)
         check("前端页面包含定时任务入口", "定时任务" in html and "空间清理" in html and "tmSpacePath" in html)
         check("前端页面包含每盘独立的检查时间设置", "tmCheckAt" in html and "globalModal" not in html)
+        check("前端页面包含弹窗背景滚动锁定", "modal-open" in html and "overscroll-behavior" in html)
 
         # 版本接口
         status, data = http("GET", "/api/about")
-        check("GET /api/about 返回版本 0.0.5", status == 200 and data.get("version") == "0.0.5")
+        check("GET /api/about 返回版本 0.1.0", status == 200 and data.get("version") == "0.1.0")
 
         # 磁盘列表
         status, data = http("GET", "/api/disks")
