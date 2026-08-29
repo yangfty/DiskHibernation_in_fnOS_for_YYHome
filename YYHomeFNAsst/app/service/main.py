@@ -24,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import urllib.parse
 
 APP_NAME = "YYHomeFNAsst"
-APP_VERSION = "0.0.4"
+APP_VERSION = "0.0.5"
 DEFAULT_PORT = 8327
 PORT = int(os.environ.get("YYHOMEFNASST_PORT", str(DEFAULT_PORT)))
 
