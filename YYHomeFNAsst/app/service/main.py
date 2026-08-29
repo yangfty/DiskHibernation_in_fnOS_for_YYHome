@@ -24,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import urllib.parse
 
 APP_NAME = "YYHomeFNAsst"
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.1.1"
 DEFAULT_PORT = 8327
 PORT = int(os.environ.get("YYHOMEFNASST_PORT", str(DEFAULT_PORT)))
 
@@ -708,6 +708,7 @@ def start_scheduler():
 # ---------------------------------------------------------------- HTTP 服务
 
 _INDEX_CACHE = {"data": None}
+_ICON_CACHE = {"data": None}
 
 
 def load_index():
@@ -722,6 +723,18 @@ def load_index():
                                     "<title>YYHomeFNAsst</title></head><body>"
                                     "<h1>YYHomeFNAsst</h1><p>前端页面缺失</p></body></html>").encode("utf-8")
     return _INDEX_CACHE["data"]
+
+
+def load_icon():
+    """加载并缓存应用图标（与 fpk 内 ICON.PNG 同源，页头与 favicon 使用）"""
+    if _ICON_CACHE["data"] is None:
+        path = os.path.join(WWW_DIR, "icon.png")
+        try:
+            with open(path, "rb") as f:
+                _ICON_CACHE["data"] = f.read()
+        except OSError:
+            _ICON_CACHE["data"] = b""
+    return _ICON_CACHE["data"]
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -753,6 +766,12 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if route in ("/", "/index.html"):
                 self._send(200, "text/html; charset=utf-8", load_index())
+            elif route == "/icon.png":
+                icon = load_icon()
+                if icon:
+                    self._send(200, "image/png", icon)
+                else:
+                    self._send(404, "text/plain; charset=utf-8", b"not found")
             elif route == "/api/disks":
                 disks, err = get_all_disks()
                 if err:
