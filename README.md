@@ -112,14 +112,16 @@
 ## 开发
 
 ```bash
-# 冒烟测试（62 项，模拟 fnOS 环境，Windows/Linux 均可运行）
+# 冒烟测试（67 项，模拟 fnOS 环境，Windows/Linux 均可运行）
 python tools/test_mock.py
 
 # 打包 fpk（需 fnOS 官方 fnpack 工具）
 tools/fnpack.exe build -d YYHomeFNAsst
+# 打包后把生成的 com.yyhome.fnasst.fpk 重命名为带版本号的文件名（本地仅保留最新版）：
+# com.yyhome.fnasst.fpk → com.yyhome.fnasst-0.0.5.fpk
 
-# 发布新版本（打 tag + 创建 Release + 上传 fpk 附件）
-python tools/release_github.py --token ghp_xxx --repo YYHomeFNAsst --version 0.0.4 --fpk com.yyhome.fnasst.fpk
+# 发布新版本（打 tag + 创建 Release + 上传 fpk 附件，历史版本由 Releases 管理）
+python tools/release_github.py --token ghp_xxx --repo YYHomeFNAsst --version 0.0.5 --fpk com.yyhome.fnasst-0.0.5.fpk
 ```
 
 ## License
