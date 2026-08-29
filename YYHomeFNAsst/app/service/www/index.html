@@ -59,6 +59,8 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
+/* 弹窗打开时锁定背景页面滚动 */
+body.modal-open { overflow: hidden; }
 .wrap { max-width: 1240px; margin: 0 auto; padding: 28px 24px 40px; }
 
 /* ---------- 顶栏 ---------- */
@@ -272,7 +274,7 @@ header { display: flex; align-items: center; justify-content: space-between; gap
   transition: all .2s ease;
 }
 .modal-close:hover { background: var(--er-bg); color: var(--er); }
-.modal-body { padding: 16px 22px 4px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.modal-body { padding: 16px 22px 4px; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 14px; }
 .modal-foot {
   display: flex; justify-content: flex-end; gap: 10px;
   padding: 14px 22px 20px;
@@ -410,7 +412,7 @@ footer .divider { margin: 0 8px; opacity: .5; }
       <div>
         <div class="title-row">
           <h1>YYHomeFNAsst</h1>
-          <span class="ver" id="verBadge">V0.0.5</span>
+          <span class="ver" id="verBadge">V0.1.0</span>
         </div>
         <div class="sub">硬盘休眠管理 · DiskHibernation in fnOS for YYHome</div>
       </div>
@@ -433,7 +435,7 @@ footer .divider { margin: 0 8px; opacity: .5; }
   <div class="grid" id="grid"></div>
 
   <footer>
-    <span id="verFooter">YYHomeFNAsst V0.0.5</span><span class="divider">·</span>支持立即休眠、定时休眠与监控空间自动清理（各硬盘独立设置）<span class="divider">·</span>不会修改 fnOS 系统自带的自动休眠设置
+    <span id="verFooter">YYHomeFNAsst V0.1.0</span><span class="divider">·</span>支持立即休眠、定时休眠与监控空间自动清理（各硬盘独立设置）<span class="divider">·</span>不会修改 fnOS 系统自带的自动休眠设置
     <br>空间清理只会删除监控目录下以日期命名的文件夹（如 2026062107），从最早开始删；部分 USB 桥接芯片不支持状态查询，或会在查询时唤醒硬盘，属正常现象
   </footer>
 </div>
@@ -777,9 +779,11 @@ function sleepDisk(id) {
 /* ---------------- 定时任务弹窗 ---------------- */
 function openModal(id) {
   document.getElementById(id).classList.add("show");
+  document.body.classList.add("modal-open");  // 锁定背景页面滚动
 }
 function closeModal(id) {
   document.getElementById(id).classList.remove("show");
+  document.body.classList.remove("modal-open");
 }
 function maskClose(ev, id) {
   if (ev.target === document.getElementById(id)) closeModal(id);
